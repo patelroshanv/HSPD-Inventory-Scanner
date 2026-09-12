@@ -193,7 +193,7 @@
 
     <div class="scan-stage" id="scanStage">
       <div class="cam-off" id="camOff">Tap "Start camera" to scan a label</div>
-      <video id="video" playsinline style="display:none;"></video>
+      <video id="video" playsinline webkit-playsinline autoplay muted style="display:none;"></video>
       <div class="scan-frame" id="scanFrame" style="display:none;"></div>
       <div class="scan-hint" id="scanHint" style="display:none;">Point the camera at a QR label</div>
     </div>
@@ -324,8 +324,16 @@ function showView(name) {
 async function toggleCamera() {
   if (scanning) { stopCamera(); return; }
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 1280 }
+      }
+    });
     const video = document.getElementById('video');
+    video.muted = true;
+    video.playsInline = true;
     video.srcObject = stream;
     await video.play();
     document.getElementById('camOff').style.display = 'none';
@@ -335,6 +343,14 @@ async function toggleCamera() {
     document.getElementById('camToggleBtn').textContent = 'Stop camera';
     scanning = true;
     requestAnimationFrame(scanFrame);
+
+    // If frames never actually start flowing (seen on some iOS Safari
+    // versions), tell the user instead of failing silently.
+    setTimeout(() => {
+      if (scanning && video.readyState < video.HAVE_CURRENT_DATA) {
+        showToast('Camera preview isn\u2019t receiving frames \u2014 try closing other camera apps, or reload the page', true);
+      }
+    }, 3000);
   } catch (e) {
     showToast('Camera unavailable — use search below instead', true);
   }
