@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventory Scanner — Param Anand PLLC</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
+<style>
+  :root {
+    --ink: #17262A;
+    --paper: #F6FAF8;
+    --teal: #0E6B5C;
+    --teal-dim: #E4F0ED;
+    --line: #C7D6D2;
+    --amber: #B5790A;
+    --red: #B3392B;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+    display: flex; flex-direction: column;
+  }
+  header {
+    background: var(--ink); color: var(--paper);
+    padding: 16px 20px 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .sub { font-size: 11.5px; color: #A9C4BD; margin-top: 2px; }
+  .icon-btn {
+    background: transparent; border: 1px solid #3A4C4F; color: var(--paper); border-radius: 6px;
+    width: 36px; height: 36px; font-size: 16px; cursor: pointer; flex: 0 0 auto;
+  }
+  main { flex: 1; overflow-y: auto; padding-bottom: 90px; }
+
+  .panel { max-width: 520px; margin: 0 auto; padding: 16px; }
+
+  /* --- Setup banner --- */
+  .setup-banner {
+    background: #FCEFDB; border: 1px solid #E8C486; color: #6B4A0E;
+    padding: 12px 14px; border-radius: 6px; font-size: 12.5px; margin-bottom: 14px; line-height: 1.5;
+    display: none;
+  }
+  .setup-banner a { color: #6B4A0E; font-weight: 700; }
+
+  /* --- Scanner view --- */
+  .scan-stage {
+    position: relative; width: 100%; aspect-ratio: 1 / 1; background: #0B1414;
+    border-radius: 10px; overflow: hidden; margin-bottom: 14px;
+  }
+  .scan-stage video { width: 100%; height: 100%; object-fit: cover; }
+  .scan-frame {
+    position: absolute; inset: 14%; border: 2.5px solid var(--teal); border-radius: 14px;
+    box-shadow: 0 0 0 999px rgba(0,0,0,0.35);
+    pointer-events: none;
+  }
+  .scan-hint {
+    position: absolute; bottom: 12px; left: 0; right: 0; text-align: center;
+    color: #E4F0ED; font-size: 12px; text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  }
+  .cam-off {
+    display: flex; align-items: center; justify-content: center; height: 100%;
+    color: #7C948E; font-size: 13px; text-align: center; padding: 20px;
+  }
+
+  button.primary {
+    background: var(--teal); color: white; border: none; padding: 12px 16px; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer; width: 100%;
+  }
+  button.primary:disabled { background: #9FB6B0; cursor: not-allowed; }
+  button.secondary {
+    background: transparent; color: var(--teal); border: 1.5px solid var(--teal); padding: 11px 16px;
+    border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%;
+  }
+  button.ghost {
+    background: transparent; color: #5B6E6A; border: none; font-size: 12.5px; cursor: pointer;
+    text-decoration: underline; padding: 4px;
+  }
+
+  .search-row { position: relative; margin-bottom: 12px; }
+  .search-row input {
+    width: 100%; padding: 12px 14px; border: 1.5px solid var(--line); border-radius: 8px; font-size: 14px;
+    background: white; color: var(--ink);
+  }
+  .search-results {
+    border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-top: -2px; background: white;
+  }
+  .search-results .result {
+    padding: 10px 14px; border-top: 1px solid var(--line); cursor: pointer; font-size: 13px;
+  }
+  .search-results .result:first-child { border-top: none; }
+  .search-results .result:hover { background: var(--teal-dim); }
+  .search-results .result .rname { font-weight: 600; margin-bottom: 2px; }
+  .search-results .result .rmeta { font-size: 11px; color: #5B6E6A; }
+
+  /* --- Item card / quantity entry --- */
+  .item-card {
+    background: white; border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 14px;
+  }
+  .item-card .cat { font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--teal); font-weight: 700; margin-bottom: 6px; }
+  .item-card .name { font-size: 15px; font-weight: 700; line-height: 1.35; margin-bottom: 10px; }
+  .item-card .row { display: flex; justify-content: space-between; font-size: 12.5px; color: #5B6E6A; padding: 4px 0; border-top: 1px solid #EEF3F1; }
+  .item-card .row:first-of-type { border-top: none; }
+  .item-card .row b { color: var(--ink); font-weight: 600; }
+
+  .qty-section { margin: 16px 0; }
+  .qty-label { font-size: 12.5px; color: #5B6E6A; margin-bottom: 8px; font-weight: 600; }
+  .qty-stepper { display: flex; align-items: center; gap: 10px; }
+  .qty-stepper button {
+    width: 46px; height: 46px; border-radius: 8px; border: 1.5px solid var(--line); background: white;
+    font-size: 20px; color: var(--teal); cursor: pointer; font-weight: 700;
+  }
+  .qty-stepper input {
+    flex: 1; text-align: center; font-size: 22px; font-weight: 700; padding: 10px; border: 1.5px solid var(--line);
+    border-radius: 8px; color: var(--ink);
+  }
+
+  .action-row { display: flex; gap: 10px; margin-top: 4px; }
+  .action-row button.secondary { flex: 0 0 auto; width: auto; padding: 12px 18px; }
+
+  .toast {
+    position: fixed; bottom: 96px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: white; padding: 10px 18px; border-radius: 20px; font-size: 13px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25); opacity: 0; pointer-events: none; transition: opacity 0.25s;
+    max-width: 90%; text-align: center;
+  }
+  .toast.show { opacity: 1; }
+  .toast.error { background: var(--red); }
+
+  nav.tabs {
+    position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--line);
+    display: flex; padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    gap: 6px;
+  }
+  nav.tabs button {
+    flex: 1; background: transparent; border: none; padding: 8px 4px; border-radius: 8px; font-size: 11.5px;
+    color: #7C948E; cursor: pointer; font-weight: 600;
+  }
+  nav.tabs button.active { color: var(--teal); background: var(--teal-dim); }
+  nav.tabs button .ic { display: block; font-size: 17px; margin-bottom: 2px; }
+
+  .log-item {
+    background: white; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; font-size: 12.5px;
+  }
+  .log-item .lname { font-weight: 600; margin-bottom: 3px; }
+  .log-item .lmeta { color: #5B6E6A; font-size: 11px; }
+  .log-item .lqty { font-weight: 700; color: var(--teal); font-size: 15px; white-space: nowrap; }
+  .log-item .lstatus { font-size: 10px; margin-top: 3px; }
+  .lstatus.ok { color: var(--teal); }
+  .lstatus.pending { color: var(--amber); }
+  .lstatus.err { color: var(--red); }
+
+  .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #5B6E6A; margin: 18px 0 8px; }
+  .section-title:first-child { margin-top: 0; }
+
+  .field-label { font-size: 12.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; display: block; }
+  .field-input {
+    width: 100%; padding: 11px 12px; border: 1.5px solid var(--line); border-radius: 8px; font-size: 13.5px;
+    margin-bottom: 14px; color: var(--ink);
+  }
+  .help-text { font-size: 12px; color: #5B6E6A; line-height: 1.5; margin-bottom: 14px; }
+  .help-text code { background: var(--teal-dim); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 6px 10px; border-radius: 20px;
+    background: var(--teal-dim); color: var(--teal); font-weight: 600; margin-bottom: 14px;
+  }
+  .status-pill.off { background: #F4E4E1; color: var(--red); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: #7C948E; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Inventory Scanner</h1>
+    <div class="sub">Param Anand PLLC</div>
+  </div>
+  <button class="icon-btn" onclick="showView('settings')" title="Settings">&#9881;</button>
+</header>
+
+<main>
+  <div class="panel" id="scanView">
+    <div class="setup-banner" id="setupBanner">
+      No Google Sheet connected yet. Scans will be saved on this device only until you finish setup. <a href="#" onclick="showView('settings'); return false;">Set up now &rarr;</a>
+    </div>
+
+    <div class="scan-stage" id="scanStage">
+      <div class="cam-off" id="camOff">Tap "Start camera" to scan a label</div>
+      <video id="video" playsinline style="display:none;"></video>
+      <div class="scan-frame" id="scanFrame" style="display:none;"></div>
+      <div class="scan-hint" id="scanHint" style="display:none;">Point the camera at a QR label</div>
+    </div>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <button class="primary" id="camToggleBtn" onclick="toggleCamera()">Start camera</button>
+
+    <div class="search-row" style="margin-top:14px;">
+      <input type="text" id="manualSearch" placeholder="Or search by item name / ID…" oninput="onManualSearch()">
+      <div class="search-results" id="searchResults" style="display:none;"></div>
+    </div>
+
+    <div id="itemArea"></div>
+  </div>
+
+  <div class="panel" id="logView" style="display:none;">
+    <div class="section-title">Scan history (this device)</div>
+    <div id="logList"></div>
+  </div>
+
+  <div class="panel" id="settingsView" style="display:none;">
+    <div class="section-title">Google Sheet connection</div>
+    <div id="connStatus"></div>
+    <label class="field-label">Apps Script Web App URL</label>
+    <input type="text" class="field-input" id="webhookUrl" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+    <button class="primary" onclick="saveWebhook()">Save connection</button>
+    <div class="help-text" style="margin-top:14px;">
+      Don't have this URL yet? Open the <b>setup guide</b> from this chat &mdash; it includes copy-paste code for a free Google Apps Script that turns any Google Sheet into a live inbox for your scans. Paste the deployed web app URL above when you're done.
+    </div>
+
+    <div class="section-title">Your name (optional)</div>
+    <label class="field-label">Logged by</label>
+    <input type="text" class="field-input" id="loggedBy" placeholder="e.g. Maria">
+
+    <div class="section-title">Data</div>
+    <button class="secondary" onclick="exportCsv()">Export scan history as CSV</button>
+    <div style="height:10px;"></div>
+    <button class="ghost" onclick="clearLog()">Clear local scan history</button>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<nav class="tabs">
+  <button id="tabScan" class="active" onclick="showView('scan')"><span class="ic">&#128247;</span>Scan</button>
+  <button id="tabLog" onclick="showView('log')"><span class="ic">&#128203;</span>History</button>
+  <button id="tabSettings" onclick="showView('settings')"><span class="ic">&#9881;</span>Settings</button>
+</nav>
+
+<script>
+const CATALOG = [{"id":"71323435","name":"Alegra Low Speed Air Handpiece \u2013 No Light, No Spray - WE-56 T, Pedo Head, Contra Angle, Push-Button Autochuck, RA","cat":"Air & Electric Handpieces & Attachments","sub":"Air & Electric Handpieces","mfg":"W&h Impex Inc","mfgNum":"30120000","lastQty":"2","price":"$771.60"},{"id":"71323732","name":"Alegra High Speed Air Handpiece \u2013 Contra Angle, Push-Button Autochuck, LED Light, 3 Spray, TE-97 LQ, Pedo Head","cat":"Air & Electric Handpieces & Attachments","sub":"Air & Electric Handpieces","mfg":"W&h Impex Inc","mfgNum":"30066000","lastQty":"3","price":"$888.16"},{"id":"71324995","name":"Synea High Speed Electric Handpiece \u2013 Pedo Head, Contra Angle, Push-Button Autochuck, LED Light, 4 Spray, FG, WG-99 LT","cat":"Air & Electric Handpieces & Attachments","sub":"Air & Electric Handpieces","mfg":"W&h Impex Inc","mfgNum":"30007000","lastQty":"2","price":"$1,682.03"},{"id":"71382100","name":"Proxeo PL-40 H Twist Cordless Hygiene Handpiece, System Doriot","cat":"Air & Electric Handpieces & Attachments","sub":"Air & Electric Handpieces","mfg":"W&h Impex Inc","mfgNum":"30317000","lastQty":"1","price":"$1,107.59"},{"id":"71035625","name":"Autoclavable Syringe Tip - Standard, 3-1/4\"","cat":"Air/Water Syringes & Tips","sub":"Air/water Syringe Tips","mfg":"Adec","mfgNum":"23.0872.02","lastQty":"1","price":"$218.43"},{"id":"71499995","name":"SureTight\u2122 Air/Water Syringe Tips - Clear, 200/Pkg","cat":"Air/Water Syringes & Tips","sub":"Air/water Syringe Tips","mfg":"Pac-dent Inc","mfgNum":"541101","lastQty":"1","price":"$38.47"},{"id":"72044907","name":"Capsule Mixer CM-II\u2122 Unit","cat":"Amalgam & Accessories","sub":"Amalgamators & Parts","mfg":"Gc America Inc","mfgNum":"003680","lastQty":"1","price":"$923.14"},{"id":"70374082","name":"Patterson Articaine HCl 4% and Epinephrine \u2013 1.7 ml Injection, 50/Pkg - 1:100,000","cat":"Anesthetics & Sedatives","sub":"Injectable Anesthetics","mfg":"Patterson Dental Supply","mfgNum":"05A1400","lastQty":"1","price":"$69.71"},{"id":"70853978","name":"Patterson\u00ae Lidocaine Anesthetic HCl 2% with Epinephrine \u2013 1.7 ml Cartridges, 50/Pkg - 1:100,000 Strength","cat":"Anesthetics & Sedatives","sub":"Injectable Anesthetics","mfg":"Patterson Dental Supply","mfgNum":"05A0100","lastQty":"1","price":"$49.08"},{"id":"70854075","name":"Patterson\u00ae Mepivacaine 3% HCl Injection without Vasoconstrictor \u2013 Latex-Free Cartridge 50/Pkg","cat":"Anesthetics & Sedatives","sub":"Injectable Anesthetics","mfg":"Patterson Dental Supply","mfgNum":"05A0003","lastQty":"1","price":"$60.97"},{"id":"76314389","name":"Septocaine\u00ae 4% Articaine HCl with Epinephrine \u2013 1.7 ml Injection Cartridges, 50/Pkg - Epinephrine 1:100,000","cat":"Anesthetics & Sedatives","sub":"Injectable Anesthetics","mfg":"Septodont Inc","mfgNum":"01A1400","lastQty":"1","price":"$77.67"},{"id":"70407130","name":"Patterson Topical Anesthetic Gel \u2013 1 oz - Strawberry","cat":"Anesthetics & Sedatives","sub":"Topical Anesthetics","mfg":"Patterson Dental Supply","mfgNum":"03-27019","lastQty":"1","price":"$6.85"},{"id":"70855544","name":"Patterson\u00ae Disposable Plastic Hub Needles - 27 Gauge Long Yellow, 100/Box","cat":"Anesthetics Syringes, Needles & Accessories","sub":"Anesthetic Needles","mfg":"Patterson Dental Supply","mfgNum":"05N1272","lastQty":"1","price":"$15.96"},{"id":"70855551","name":"Patterson\u00ae Disposable Plastic Hub Needles - 30 Gauge Extra-Short Purple, 100/Box","cat":"Anesthetics Syringes, Needles & Accessories","sub":"Anesthetic Needles","mfg":"Patterson Dental Supply","mfgNum":"05N1300","lastQty":"1","price":"$15.96"},{"id":"70855569","name":"Patterson\u00ae Disposable Plastic Hub Needles - 30 Gauge Short Blue, 100/Box","cat":"Anesthetics Syringes, Needles & Accessories","sub":"Anesthetic Needles","mfg":"Patterson Dental Supply","mfgNum":"05N1301","lastQty":"1","price":"$15.96"},{"id":"73755972","name":"Aspirating Anesthetic Syringes, 1.8 ml Cartridge - Cook Waite Anesthetic Aspirating Syringe","cat":"Anesthetics Syringes, Needles & Accessories","sub":"Anesthetic Syringe & Accessories","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"SYRCW","lastQty":"1","price":"$69.98"},{"id":"70838755","name":"Patterson\u00ae Articulating Paper - Thin, 71 Microns, Blue, 12/Pkg","cat":"Articulating & Occlusal Indicators","sub":"Articulating Paper","mfg":"Patterson Dental Supply","mfgNum":"20 10 7023","lastQty":"1","price":"$6.22"},{"id":"74876504","name":"Speed-Clean Autoclave Cleaner Solution, 16 oz Bottle","cat":"Autoclave Supplies","sub":"Autoclave Cleaners, Sterilants & Instrument Treatments","mfg":"Midmark","mfgNum":"002-0396-05","lastQty":"1","price":"$21.15"},{"id":"71253053","name":"IMS Lead-Free Blank Steam Indicator Tape \u2013 3/4\", 60 Yd Roll","cat":"Autoclave Supplies","sub":"Autoclave Indicator Tape & Dispensers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-1461","lastQty":"1","price":"$11.90"},{"id":"73709458","name":"IMS Monitor Tape \u2013 Procedure Coded 60 Yards, 3/4\" - Restorative","cat":"Autoclave Supplies","sub":"Autoclave Indicator Tape & Dispensers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-1247","lastQty":"1","price":"$27.40"},{"id":"73711116","name":"IMS Monitor Tape \u2013 Procedure Coded 60 Yards, 3/4\" - Prophy","cat":"Autoclave Supplies","sub":"Autoclave Indicator Tape & Dispensers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-1259","lastQty":"1","price":"$27.33"},{"id":"70842575","name":"Patterson Pouch Plus Sterilization Pouches - 3-1/2 x 9, 200/Pkg","cat":"Autoclave Supplies","sub":"Autoclave Pouches & Bags","mfg":"Patterson Dental Supply","mfgNum":"084-2575","lastQty":"1","price":"$15.77"},{"id":"70842583","name":"Patterson Pouch Plus Sterilization Pouches - 5-1/4 x 10, 200/Pkg","cat":"Autoclave Supplies","sub":"Autoclave Pouches & Bags","mfg":"Patterson Dental Supply","mfgNum":"084-2583","lastQty":"1","price":"$22.69"},{"id":"70842617","name":"Patterson Pouch Plus Sterilization Pouches - 3-1/2 x 5-1/4, 200/Pkg","cat":"Autoclave Supplies","sub":"Autoclave Pouches & Bags","mfg":"Patterson Dental Supply","mfgNum":"084-2617","lastQty":"3","price":"$16.05"},{"id":"72351401","name":"Sterilization Pouches - 3-1/2\" x 5-1/4\", Blue, 200/Pkg","cat":"Autoclave Supplies","sub":"Autoclave Pouches & Bags","mfg":"Crosstex International","mfgNum":"SCXS","lastQty":"1","price":"$18.02"},{"id":"72351443","name":"Sterilization Pouches - 10\" x 15\", Blue, 100/Pkg","cat":"Autoclave Supplies","sub":"Autoclave Pouches & Bags","mfg":"Crosstex International","mfgNum":"SCL1015","lastQty":"1","price":"$50.84"},{"id":"72351450","name":"Sterilization Pouches - 12\" x 15\", Blue, 100/Pkg","cat":"Autoclave Supplies","sub":"Autoclave Pouches & Bags","mfg":"Crosstex International","mfgNum":"SCL1215","lastQty":"1","price":"$50.35"},{"id":"70838656","name":"Patterson\u00ae Biological Monitoring System, Test Kits - 2-Strip Test Kits, 12 Kits","cat":"Autoclave Supplies","sub":"Autoclave Test Strips & Bio Monitors","mfg":"Patterson Dental Supply","mfgNum":"CST120PD","lastQty":"1","price":"$95.01"},{"id":"73712007","name":"Steam Sterilization Integrator","cat":"Autoclave Supplies","sub":"Autoclave Test Strips & Bio Monitors","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-1241","lastQty":"1","price":"$32.33"},{"id":"73709698","name":"IMS Universal Cassette Sterilization Wraps \u2013 Tape Seal, No Indicator - Universal, 15\" x 15\", 1000/Pkg","cat":"Autoclave Supplies","sub":"Autoclave Wrap","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-1215","lastQty":"1","price":"$187.13"},{"id":"73228673","name":"Brixton\u00ae Disposable Plastic Headrest Covers, 250/Pkg - Regular, 10\" x 11-1/4\"","cat":"Barrier Protection","sub":"Headrest Covers","mfg":"Filmtech Inc","mfgNum":"501R","lastQty":"1","price":"$14.59"},{"id":"71070531","name":"Patterson\u00ae Tray Covers \u2013 Size B: 12-1/4\" W x 8-1/2\" L, 1000/Pkg - White","cat":"Barrier Protection","sub":"Tray Covers","mfg":"Patterson Dental Supply","mfgNum":"FBWHPAT","lastQty":"1","price":"$42.82"},{"id":"71423771","name":"Patterson\u00ae Instrument Tray Cover Sleeves, 500/Pkg - Fits Ritter B Trays","cat":"Barrier Protection","sub":"Tray Covers","mfg":"Patterson Dental Supply","mfgNum":"PA101","lastQty":"1","price":"$24.01"},{"id":"76070916","name":"Universal Digital Sensor Barriers/Covers, 500/Box","cat":"Barrier Protection","sub":"X-ray, Digital Sensor & Camera Covers","mfg":"Dentsply Rinn","mfgNum":"550500","lastQty":"1","price":"$95.88"},{"id":"71267590","name":"3M\u2122 Scotchbond\u2122 Universal Plus Adhesive Vial Refill","cat":"Bonding Agents, Adhesives & Etchants","sub":"Bonding Single Component Separate Etch","mfg":"Solventum Us Llc","mfgNum":"41294","lastQty":"3","price":"$179.51"},{"id":"77148240","name":"Best-Etch\u2122 37% Phosphoric Acid Etch Gel \u2013 Value Pack","cat":"Bonding Agents, Adhesives & Etchants","sub":"Etchant Intraoral","mfg":"Vista Dental Products","mfgNum":"502200","lastQty":"1","price":"$40.42"},{"id":"70954057","name":"Patterson\u00ae Super Elastic Nickel Titanium Arch Wire \u2013 Round, 10/Pkg - Upper Arch, .016","cat":"Brackets & Wire","sub":"Wire","mfg":"Patterson Dental Supply","mfgNum":"070954057","lastQty":"1","price":"$14.31"},{"id":"70954065","name":"Patterson\u00ae Super Elastic Nickel Titanium Arch Wire \u2013 Round, 10/Pkg - Lower Arch, .016","cat":"Brackets & Wire","sub":"Wire","mfg":"Patterson Dental Supply","mfgNum":"070954065","lastQty":"1","price":"$14.31"},{"id":"71043892","name":"KaVo Kerr\u2122 Regular Operative Carbide Burs \u2013 FG, Pear 6 Flute - # 330, 0.8 mm Diameter, 1.6 mm Length, 10/Pkg","cat":"Bur & Diamond Rotary Instruments","sub":"Carbide Burs","mfg":"Kerr Rotary","mfgNum":"FG330-KC0","lastQty":"1","price":"$25.08"},{"id":"71043918","name":"KaVo Kerr\u2122 Regular Operative Carbide Burs \u2013 FG, Straight Flat End Crosscut 6 Flute - # 557, 1 mm Diameter, 3.7 mm Length, 10/Pkg","cat":"Bur & Diamond Rotary Instruments","sub":"Carbide Burs","mfg":"Kerr Rotary","mfgNum":"FG557-KC0","lastQty":"1","price":"$25.08"},{"id":"71044338","name":"KaVo Kerr\u2122 Regular Operative Carbide Burs, Latch - Round 6 Flute, # 4, 1.4 mm Diameter, 10/Pkg","cat":"Bur & Diamond Rotary Instruments","sub":"Carbide Burs","mfg":"Kerr Rotary","mfgNum":"LA4-KC0","lastQty":"1","price":"$24.70"},{"id":"71044346","name":"KaVo Kerr\u2122 Regular Operative Carbide Burs, Latch - Round 8 Flute, # 6, 1.8 mm Diameter, 10/Pkg","cat":"Bur & Diamond Rotary Instruments","sub":"Carbide Burs","mfg":"Kerr Rotary","mfgNum":"LA6-KC0","lastQty":"1","price":"$24.70"},{"id":"71053834","name":"KaVo Kerr\u2122 Regular Operative Carbide Burs, Latch - Round 8 Flute, # 8, 2.3 mm Diameter, 10/Pkg","cat":"Bur & Diamond Rotary Instruments","sub":"Carbide Burs","mfg":"Kerr Rotary","mfgNum":"LA8-KC0","lastQty":"1","price":"$18.93"},{"id":"71155456","name":"NTI\u00ae Trimming & Finishing Carbides \u2013 12 Fluted, FG, Long Flame, 5/Pkg - Size #7901, 0.9 mm Diameter","cat":"Bur & Diamond Rotary Instruments","sub":"Carbide Burs","mfg":"Kerr Rotary","mfgNum":"H246-009","lastQty":"1","price":"$56.88"},{"id":"71160613","name":"NTI\u00ae Trimming & Finishing Carbides \u2013 12 Fluted, FG, OA Series: Football, 5/Pkg - Size #7408, 2.3 mm Diameter","cat":"Bur & Diamond Rotary Instruments","sub":"Carbide Burs","mfg":"Kerr Rotary","mfgNum":"H379-023","lastQty":"1","price":"$56.88"},{"id":"71079912","name":"Patterson\u00ae Ultrasharp Diamond Burs \u2013 FG Standard, Super Coarse, 5/Pkg - Round End Taper, Chamfer Diamond, # 855-012, 1.2 mm Diameter, 6.0 mm Length","cat":"Bur & Diamond Rotary Instruments","sub":"Diamond Burs","mfg":"Patterson Dental Supply","mfgNum":"07-1079912","lastQty":"1","price":"$36.55"},{"id":"71079979","name":"Patterson\u00ae Ultrasharp Diamond Burs \u2013 FG Standard, Super Coarse, 5/Pkg - Round End Taper, Chamfer Diamond, # 856-014, 1.4 mm Diameter, 8.0 mm Length","cat":"Bur & Diamond Rotary Instruments","sub":"Diamond Burs","mfg":"Patterson Dental Supply","mfgNum":"07-1079979","lastQty":"1","price":"$36.55"},{"id":"71209741","name":"NTI\u00ae Mini Diamond Burs \u2013 FGSS, 5/Pkg - Super Coarse, Black, Taper Round End, # SC856, 1.2 mm Diameter, 8.0 mm Length","cat":"Bur & Diamond Rotary Instruments","sub":"Diamond Burs","mfg":"Kerr Rotary","mfgNum":"SC856-012M","lastQty":"1","price":"$68.30"},{"id":"75456769","name":"NTI\u00ae Diamond Burs \u2013 FG, Super Coarse, Football Round End, # SC379, 5/Pkg - 2.3 mm Diameter, 4.5 mm Length","cat":"Bur & Diamond Rotary Instruments","sub":"Diamond Burs","mfg":"Kerr Rotary","mfgNum":"SC379-023","lastQty":"1","price":"$69.33"},{"id":"75457213","name":"NTI\u00ae Diamond Burs \u2013 FG, Super Coarse, Cone, 5/Pkg - Taper, # SC856, 1.4 mm Diameter, 8.0 mm Length","cat":"Bur & Diamond Rotary Instruments","sub":"Diamond Burs","mfg":"Kerr Rotary","mfgNum":"SC856-014","lastQty":"1","price":"$69.33"},{"id":"75457221","name":"NTI\u00ae Diamond Burs \u2013 FG, Super Coarse, Cone, 5/Pkg - Taper, # SC856, 1.6 mm Diameter, 8.0 mm Length","cat":"Bur & Diamond Rotary Instruments","sub":"Diamond Burs","mfg":"Kerr Rotary","mfgNum":"SC856-016","lastQty":"1","price":"$69.33"},{"id":"75457593","name":"NTI\u00ae Diamond Burs \u2013 FG, Super Coarse, Cone Bevel End, 5/Pkg - Curettage, # SC878K, 1.2 mm Diameter, 8.0 mm Length","cat":"Bur & Diamond Rotary Instruments","sub":"Diamond Burs","mfg":"Kerr Rotary","mfgNum":"SC878K-012","lastQty":"1","price":"$69.33"},{"id":"75457726","name":"NTI\u00ae Diamond Burs \u2013 FG, Super Coarse, Wheel Flat End, Donut, # SC909, 5/Pkg - 4.0 mm Diameter, 2.0 mm Length","cat":"Bur & Diamond Rotary Instruments","sub":"Diamond Burs","mfg":"Kerr Rotary","mfgNum":"SC909-040","lastQty":"1","price":"$69.33"},{"id":"71206507","name":"Bur Blocks - 15 Holes, 10 FG/5 RA, Green","cat":"Bur & Diamond Sets & Accessories","sub":"Bur & Diamond Holders","mfg":"Kerr Rotary","mfgNum":"AB320-1T","lastQty":"1","price":"$48.17"},{"id":"71206515","name":"Bur Blocks - 15 Holes, 10 FG/5 RA, Blue","cat":"Bur & Diamond Sets & Accessories","sub":"Bur & Diamond Holders","mfg":"Kerr Rotary","mfgNum":"AB320-1U","lastQty":"1","price":"$48.17"},{"id":"74969002","name":"Mesh Bur and Diamond Holder - Large 2-1/8\"","cat":"Bur & Diamond Sets & Accessories","sub":"Bur Set & Holder Accessories","mfg":"Miltex By Integra","mfgNum":"65-28","lastQty":"1","price":"$6.87"},{"id":"73683299","name":"Burnishers \u2013 # 27/29, XTS\u00ae, Smooth Satin Steel\u00ae Handle, Double End","cat":"Burnishers, Carriers, Pluggers & Condensers","sub":"Burnishers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"TNBB27/29","lastQty":"1","price":"$56.15"},{"id":"73683042","name":"Carver \u2013 89/92, Discoid-Cleoid, Double End - 6 Satin Steel Handle","cat":"Carvers & Hoes","sub":"Carvers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"CD89/926","lastQty":"2","price":"$38.17"},{"id":"70416875","name":"IMS\u00ae Infinity Series\u2122 Cassettes \u2013 5 Instrument Cassette, 8\" x 1.25\" x 3\" - Purple","cat":"Cassettes & Accessories","sub":"Cassettes","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMN6054","lastQty":"5","price":"$136.40"},{"id":"75038930","name":"Vitrebond\u2122 Plus Light-Cure Glass Ionomer Liner/Base Single Pack with Mixing Pad","cat":"Cements and Desensitizers","sub":"Bases & Liners","mfg":"Solventum Us Llc","mfgNum":"7571","lastQty":"1","price":"$277.92"},{"id":"71396753","name":"NeoPUTTY\u00ae MTA Bioactive Bioceramic Premixed Root and Pulp Treatment Kit, 1.2 g Syringe","cat":"Cements and Desensitizers","sub":"Cement Endodontic","mfg":"Nusmile Ltd","mfgNum":"ANPPK","lastQty":"1","price":"$155.90"},{"id":"70421909","name":"GC FujiCEM\u2122 2 Glass Ionomer Cement Intro Kit","cat":"Cements and Desensitizers","sub":"Cement Glass Ionomer Luting","mfg":"Gc America Inc","mfgNum":"441001","lastQty":"1","price":"$216.53"},{"id":"75037320","name":"RelyX\u2122 Luting Plus Automix Cement Value Pack","cat":"Cements and Desensitizers","sub":"Cement Glass Ionomer Luting","mfg":"Solventum Us Llc","mfgNum":"3535","lastQty":"1","price":"$301.24"},{"id":"75801923","name":"Ketac Cem Radiopaque Permanent Glass Ionomer Luting Cement Introductory Kit (Hand-Mix Version)","cat":"Cements and Desensitizers","sub":"Cement Glass Ionomer Luting","mfg":"Solventum Us Llc","mfgNum":"37201","lastQty":"1","price":"$210.49"},{"id":"71472661","name":"SilverSense SDF\u2122 38% Silver Diamine Fluoride Standard Kit, 5 ml Bottle","cat":"Cements and Desensitizers","sub":"Desensitizers","mfg":"Centrix Inc","mfgNum":"310172","lastQty":"1","price":"$119.90"},{"id":"72362606","name":"Micro Prime\u2122 Desensitizer, 10 ml Bottle - Type G, Glutaraldehyde","cat":"Cements and Desensitizers","sub":"Desensitizers","mfg":"Zest Anchors Inc","mfgNum":"90814","lastQty":"1","price":"$132.76"},{"id":"73710563","name":"Enzymax\u2122 Pump for Gallon Bottle","cat":"Cleaner Bottles, Dispensers & Parts","sub":"Cleaner Bottle & Dispenser Parts","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-1226P","lastQty":"1","price":"$7.41"},{"id":"73704939","name":"Satin Steel XTS\u00ae Composite Instruments \u2013 3 Goldstein Flexi-Thin Titanium, Double End","cat":"Composite & Plastic Filling Instruments & Parts","sub":"Composite & Plastic Filling Instruments","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"TNCIGFT3","lastQty":"2","price":"$54.40"},{"id":"70450957","name":"Braval\u00ae Nonwoven Sponges, 4 Ply - 4\" x 4\", 2000/Pkg","cat":"Cotton Rolls, Pellets & Sponges","sub":"Absorbent Sponges","mfg":"Braval","mfgNum":"BNWS-444","lastQty":"1","price":"$29.09"},{"id":"71074129","name":"Patterson\u00ae Cotton-Filled Sponges \u2013 2\" x 2\", Nonsterile, 5000/Case","cat":"Cotton Rolls, Pellets & Sponges","sub":"Absorbent Sponges","mfg":"Patterson Dental Supply","mfgNum":"107-4129","lastQty":"1","price":"$99.93"},{"id":"77654379","name":"Roeko Cotton Pellets - 0, 4 g","cat":"Cotton Rolls, Pellets & Sponges","sub":"Cotton Pellets & Alternatives","mfg":"Coltene","mfgNum":"210110","lastQty":"1","price":"$18.25"},{"id":"70850073","name":"Patterson\u00ae Nonsterile Cotton Rolls, 2000/Pkg","cat":"Cotton Rolls, Pellets & Sponges","sub":"Cotton Rolls & Alternatives","mfg":"Patterson Dental Supply","mfgNum":"4554-PAT","lastQty":"1","price":"$22.83"},{"id":"72597276","name":"Dri-Angle\u00ae Cotton Roll Alternative, Plain - Small, 400/Pkg","cat":"Cotton Rolls, Pellets & Sponges","sub":"Cotton Rolls & Alternatives","mfg":"Great Lakes Dental Technologies","mfgNum":"S","lastQty":"1","price":"$18.80"},{"id":"73754306","name":"Stainless Steel Pedo Crown, Intro Kit","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"SSC-KIT","lastQty":"1","price":"$249.49"},{"id":"75009097","name":"Stainless Steel Primary Molar Crowns Starter Kit","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"ND-96","lastQty":"1","price":"$772.26"},{"id":"75009105","name":"Stainless Steel Permanent Molar Crowns Kit","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"PO-96","lastQty":"1","price":"$772.26"},{"id":"75009121","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DUL2, First Molar, Upper Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-UL-2","lastQty":"1","price":"$38.23"},{"id":"75009139","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DUR2, First Molar, Upper Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-UR-2","lastQty":"1","price":"$38.23"},{"id":"75009147","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DLL2, First Molar, Lower Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-LL-2","lastQty":"1","price":"$38.23"},{"id":"75009154","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DLR2, First Molar, Lower Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-LR-2","lastQty":"1","price":"$38.23"},{"id":"75009162","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - EUL2, Second Molar, Upper Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-UL-2","lastQty":"1","price":"$38.23"},{"id":"75009170","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - EUR2, Second Molar, Upper Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-UR-2","lastQty":"1","price":"$38.23"},{"id":"75009188","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - ELL2, Second Molar, Lower Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-LL-2","lastQty":"1","price":"$38.23"},{"id":"75009196","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - ELR2, Second Molar, Lower Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-LR-2","lastQty":"1","price":"$38.23"},{"id":"75009204","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DUL3, First Molar, Upper Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-UL-3","lastQty":"1","price":"$38.23"},{"id":"75009212","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DUR3, First Molar, Upper Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-UR-3","lastQty":"1","price":"$38.23"},{"id":"75009220","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DLL3, First Molar, Lower Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-LL-3","lastQty":"1","price":"$38.23"},{"id":"75009238","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DLR3, First Molar, Lower Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-LR-3","lastQty":"1","price":"$38.23"},{"id":"75009246","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - EUL3, Second Molar, Upper Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-UL-3","lastQty":"1","price":"$38.23"},{"id":"75009253","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - EUR3, Second Molar, Upper Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-UR-3","lastQty":"1","price":"$38.23"},{"id":"75009261","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - ELL3, Second Molar, Lower Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-LL-3","lastQty":"1","price":"$38.23"},{"id":"75009279","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - ELR3, Second Molar, Lower Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-LR-3","lastQty":"1","price":"$38.23"},{"id":"75009287","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DUL4, First Molar, Upper Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-UL-4","lastQty":"1","price":"$38.23"},{"id":"75009295","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DUR4, First Molar, Upper Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-UR-4","lastQty":"1","price":"$38.23"},{"id":"75009303","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DLL4, First Molar, Lower Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-LL-4","lastQty":"1","price":"$38.23"},{"id":"75009311","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DLR4, First Molar, Lower Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-LR-4","lastQty":"1","price":"$38.23"},{"id":"75009329","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - EUL4, Second Molar, Upper Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-UL-4","lastQty":"1","price":"$38.23"},{"id":"75009337","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - EUR4, Second Molar, Upper Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-UR-4","lastQty":"1","price":"$38.23"},{"id":"75009345","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - ELL4, Second Molar, Lower Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-LL-4","lastQty":"1","price":"$38.23"},{"id":"75009352","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - ELR4, Second Molar, Lower Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-LR-4","lastQty":"1","price":"$38.23"},{"id":"75009360","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DUL5, First Molar, Upper Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-UL-5","lastQty":"1","price":"$38.23"},{"id":"75009378","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DUR5, First Molar, Upper Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-UR-5","lastQty":"1","price":"$38.23"},{"id":"75009386","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DLL5, First Molar, Lower Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-LL-5","lastQty":"1","price":"$38.23"},{"id":"75009394","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DLR5, First Molar, Lower Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-LR-5","lastQty":"1","price":"$38.23"},{"id":"75009402","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - EUL5, Second Molar, Upper Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-UL-5","lastQty":"1","price":"$38.23"},{"id":"75009410","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - EUR5, Second Molar, Upper Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-UR-5","lastQty":"1","price":"$38.23"},{"id":"75009428","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - ELL5, Second Molar, Lower Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-LL-5","lastQty":"1","price":"$38.23"},{"id":"75009436","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - ELR5, Second Molar, Lower Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-LR-5","lastQty":"1","price":"$38.23"},{"id":"75009444","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DUL6, First Molar, Upper Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-UL-6","lastQty":"1","price":"$38.23"},{"id":"75009451","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DUR6, First Molar, Upper Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-UR-6","lastQty":"1","price":"$38.23"},{"id":"75009469","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DLL6, First Molar, Lower Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-LL-6","lastQty":"1","price":"$38.23"},{"id":"75009477","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - DLR6, First Molar, Lower Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"D-LR-6","lastQty":"1","price":"$38.23"},{"id":"75009485","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - EUL6, Second Molar, Upper Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-UL-6","lastQty":"1","price":"$38.23"},{"id":"75009493","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - EUR6, Second Molar, Upper Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-UR-6","lastQty":"1","price":"$38.23"},{"id":"75009501","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - ELL6, Second Molar, Lower Left","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-LL-6","lastQty":"1","price":"$38.23"},{"id":"75009519","name":"Stainless Steel Primary Molar Crowns Refill, 5/Pkg - ELR6, Second Molar, Lower Right","cat":"Crowns, Bands and Shells","sub":"Crowns Metal","mfg":"Solventum Us Llc","mfgNum":"E-LR-6","lastQty":"1","price":"$38.23"},{"id":"71074004","name":"Patterson\u00ae Cotton-Tipped Applicators \u2013 100/Bag, 10 Bags/Box - 3\"","cat":"Dispensing Guns, Syringes & Applicators","sub":"Cotton-tipped Applicators & Alternatives","mfg":"Patterson Dental Supply","mfgNum":"107-4004","lastQty":"1","price":"$8.79"},{"id":"76337851","name":"Monoject\u00ae Curved Syringe \u2013 12 ml, 50/Pkg","cat":"Dispensing Guns, Syringes & Applicators","sub":"Dispensing & Irrigating Syringes","mfg":"Cardinal Health","mfgNum":"8881412012","lastQty":"1","price":"$29.45"},{"id":"72088607","name":"Capsule Applier III","cat":"Dispensing Guns, Syringes & Applicators","sub":"Dispensing Guns","mfg":"Gc America Inc","mfgNum":"437555","lastQty":"1","price":"$123.03"},{"id":"70852335","name":"Patterson\u00ae Prebent Applicator/Dispensing Tips - 20 Gauge, Black, 125/Pkg","cat":"Dispensing Guns, Syringes & Applicators","sub":"Gun & Syringe Tips, Needles & Caps","mfg":"Patterson Dental Supply","mfgNum":"315320-3","lastQty":"1","price":"$16.23"},{"id":"70852343","name":"Patterson\u00ae Prebent Applicator/Dispensing Tips - 22 Gauge, Black, 125/Pkg","cat":"Dispensing Guns, Syringes & Applicators","sub":"Gun & Syringe Tips, Needles & Caps","mfg":"Patterson Dental Supply","mfgNum":"315322-3","lastQty":"1","price":"$16.23"},{"id":"70852350","name":"Patterson\u00ae Prebent Applicator/Dispensing Tips - 25 Gauge, Blue, 125/Pkg","cat":"Dispensing Guns, Syringes & Applicators","sub":"Gun & Syringe Tips, Needles & Caps","mfg":"Patterson Dental Supply","mfgNum":"315325-3","lastQty":"2","price":"$16.23"},{"id":"75037346","name":"RelyX\u2122 Luting Plus Automix Tips, 12/Pkg","cat":"Dispensing Guns, Syringes & Applicators","sub":"Mixing & Intraoral Cartridge Tips","mfg":"Solventum Us Llc","mfgNum":"3540","lastQty":"2","price":"$16.06"},{"id":"75760509","name":"Garant\u2122 Mixing Tips, 50/Pkg - Green","cat":"Dispensing Guns, Syringes & Applicators","sub":"Mixing & Intraoral Cartridge Tips","mfg":"Solventum Us Llc","mfgNum":"71450","lastQty":"1","price":"$78.99"},{"id":"70419879","name":"Surgical Elevators \u2013 9 Molt Periosteal, Double End - 6 Satin Steel Handle","cat":"Elevators, Periosteals & Periotomes","sub":"Elevators","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"P96","lastQty":"1","price":"$82.39"},{"id":"73696804","name":"Surgical Elevators \u2013 301 Apexo, Single End - Large Tapered Hexagonal Handle","cat":"Elevators, Periosteals & Periotomes","sub":"Elevators","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"E301","lastQty":"2","price":"$102.53"},{"id":"73730595","name":"Root Tip Picks \u2013 13/14 Heidbrink, Double End","cat":"Elevators, Periosteals & Periotomes","sub":"Root Tip Picks","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"EHB13/14","lastQty":"1","price":"$79.37"},{"id":"70470443","name":"Patterson\u00ae Endo Refrigerant Spray \u2013 10 oz Spray Can - Unscented","cat":"Endodontic Files, Reamers & Accessories","sub":"Endodontic Miscellaneous","mfg":"Patterson Dental Supply","mfgNum":"60020181","lastQty":"1","price":"$29.42"},{"id":"71092907","name":"EZ 1-2-3 Atomizer","cat":"Evacuation Cleaners & Replacement Parts","sub":"Evacuation Line Cleaning Solutions","mfg":"Biotrol International","mfgNum":"ED592","lastQty":"1","price":"$85.02"},{"id":"71362276","name":"Evacuation System Cleaner, Fresh Scent - 128 oz (1 Gallon) Pump Bottle","cat":"Evacuation Cleaners & Replacement Parts","sub":"Evacuation Line Cleaning Solutions","mfg":"Adec","mfgNum":"91.0061.01","lastQty":"2","price":"$92.98"},{"id":"71034610","name":"Solids Trap Screen \u2013 10/Pkg","cat":"Evacuation Cleaners & Replacement Parts","sub":"Evacuator Screens, Traps & Filters","mfg":"Adec","mfgNum":"11.1284.01","lastQty":"1","price":"$11.49"},{"id":"70894097","name":"Patterson\u00ae Legacy Saliva Ejectors, 100/Pkg - Unscented, White with White Tip","cat":"Evacuator Handpieces & Tips","sub":"Saliva Ejectors, Hve & Aspirator Tips","mfg":"Patterson Dental Supply","mfgNum":"07-0894097","lastQty":"1","price":"$6.15"},{"id":"70894220","name":"Patterson\u00ae Combination HVE Aspirator Tips, 100/Pkg","cat":"Evacuator Handpieces & Tips","sub":"Saliva Ejectors, Hve & Aspirator Tips","mfg":"Patterson Dental Supply","mfgNum":"7000862","lastQty":"2","price":"$6.29"},{"id":"70894303","name":"Patterson\u00ae Surgical Aspirator Tips, 25/Pkg - Regular, 1/8\" Tip, White","cat":"Evacuator Handpieces & Tips","sub":"Saliva Ejectors, Hve & Aspirator Tips","mfg":"Patterson Dental Supply","mfgNum":"082125","lastQty":"1","price":"$19.22"},{"id":"73700374","name":"Excavator \u2013 18 Spoon, Double End - 6 Satin Steel Handle","cat":"Excavators, Hatchets & Margin Trimmers","sub":"Excavators","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"EXC186","lastQty":"2","price":"$41.18"},{"id":"73679750","name":"Explorer \u2013 5, Double End - 6 Satin Steel Handle","cat":"Explorers, Probes & Pocket Markers","sub":"Explorers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"EXD56","lastQty":"2","price":"$30.38"},{"id":"73724630","name":"Qulix\u2122 Color-Coded Probes \u2013 CP-12, Single End - 6 Satin Steel Handle, Marking at 3-6-9-12","cat":"Explorers, Probes & Pocket Markers","sub":"Probes","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"PCP126","lastQty":"1","price":"$36.13"},{"id":"74146650","name":"OptiDisc\u00ae Finishing and Polishing Discs Assorted Kit","cat":"Finishing & Polishing Rotary Instruments","sub":"Finishing Discs","mfg":"Kerr Rotary","mfgNum":"33475","lastQty":"1","price":"$195.53"},{"id":"71151117","name":"Progloss\u2122 One Step Composite Polishers, 12/Pkg - Point","cat":"Finishing & Polishing Rotary Instruments","sub":"Polishers","mfg":"Kerr Rotary","mfgNum":"P8001","lastQty":"1","price":"$104.40"},{"id":"73705100","name":"Pediatric Forceps \u2013 1 Standard, Upper Incisors and Canines","cat":"Forceps, Pliers, Hemostats & Removers","sub":"Forceps","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"F1S","lastQty":"1","price":"$223.70"},{"id":"73705118","name":"Pediatric Forceps \u2013 23 Cowhorn, 1st and Lower 2nd Molars","cat":"Forceps, Pliers, Hemostats & Removers","sub":"Forceps","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"F23S","lastQty":"1","price":"$223.70"},{"id":"73706314","name":"Pediatric Forceps \u2013 150S, Upper Primary Teeth and Roots","cat":"Forceps, Pliers, Hemostats & Removers","sub":"Forceps","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"F150S","lastQty":"1","price":"$228.28"},{"id":"73706322","name":"Pediatric Forceps \u2013 # 151S, Universal, Lower Primary Teeth and Roots","cat":"Forceps, Pliers, Hemostats & Removers","sub":"Forceps","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"F151S","lastQty":"1","price":"$228.28"},{"id":"73715828","name":"Needle Holder \u2013 Crile-Wood 15 cm/6\" Grooved","cat":"Forceps, Pliers, Hemostats & Removers","sub":"Needle Holders","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"NHCW","lastQty":"1","price":"$131.51"},{"id":"73721685","name":"Dressing Pliers \u2013 # U17, Utility Pick-Up, Serrated Tip","cat":"Forceps, Pliers, Hemostats & Removers","sub":"Pliers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"DPU17","lastQty":"2","price":"$25.42"},{"id":"73758406","name":"How Straight Utility Pliers","cat":"Forceps, Pliers, Hemostats & Removers","sub":"Pliers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"678-203","lastQty":"1","price":"$196.57"},{"id":"73758448","name":"Long Posterior Band Removing Utility Pliers","cat":"Forceps, Pliers, Hemostats & Removers","sub":"Pliers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"678-207","lastQty":"1","price":"$196.57"},{"id":"73758497","name":"Wire Forming Pliers \u2013 Three Jaw Pliers","cat":"Forceps, Pliers, Hemostats & Removers","sub":"Pliers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"678-302","lastQty":"1","price":"$196.57"},{"id":"73758513","name":"Wire Forming Pliers \u2013 Bird Beak Pliers","cat":"Forceps, Pliers, Hemostats & Removers","sub":"Pliers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"678-304","lastQty":"1","price":"$196.57"},{"id":"71260322","name":"Assistina Twin MB-302 QD Handpiece Maintenance System","cat":"Handpiece Lubrication & Maintenance","sub":"Handpiece Maintenance Systems","mfg":"W&h Impex Inc","mfgNum":"90000306","lastQty":"1","price":"$3,275.08"},{"id":"71324243","name":"Alegra Low Speed Air Motors - AM-20RM","cat":"Handpiece Motors & Control Units","sub":"Handpiece Motors","mfg":"W&h Impex Inc","mfgNum":"30106000","lastQty":"2","price":"$884.34"},{"id":"71323344","name":"Roto Quick High Speed Handpiece Couplers - RQ-54","cat":"Handpiece Replacement Parts & Accessories","sub":"Handpiece Swivels & Couplers","mfg":"W&h Impex Inc","mfgNum":"10405400","lastQty":"2","price":"$506.23"},{"id":"70370817","name":"3M\u2122 Imprint\u2122 4 Preliminary Penta\u2122 VPS Impression Material Refill - Penta\u2122, Regular Set, 2 Minutes","cat":"Impression Material","sub":"Vinyl Polysiloxane","mfg":"Solventum Us Llc","mfgNum":"71521","lastQty":"1","price":"$154.62"},{"id":"70392910","name":"3M\u2122 Imprint\u2122 4 Preliminary VPS Impression Material Cartridge, 50 ml - Regular Set Economy Pack","cat":"Impression Material","sub":"Vinyl Polysiloxane","mfg":"Solventum Us Llc","mfgNum":"71539","lastQty":"1","price":"$167.03"},{"id":"73712569","name":"IMS Color Code Rings \u2013 Large, 50/Pkg - Lavender","cat":"Instrument Labels & Identification","sub":"Instrument Id Rings","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-12811L","lastQty":"1","price":"$20.12"},{"id":"73712718","name":"IMS\u00ae Tape Dispensers - Mini Tape Dispenser","cat":"Instrument Labels & Identification","sub":"Instrument Id Tape Dispensers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-1270H","lastQty":"1","price":"$106.97"},{"id":"73711611","name":"Surgical Instruments Miscellaneous \u2013 Silicone Lubricant and Rust Inhibitor, 8 oz Pump Bottle","cat":"Instrument Maintenance & Accessories","sub":"Instrument Cleaning & Lubrication Kits & Supplies","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"ILS","lastQty":"1","price":"$28.89"},{"id":"71260967","name":"SprintRay Die and Model 2, 1 Liter - Tan","cat":"Lab Miscellaneous","sub":"3d Resins","mfg":"Sprintray Inc","mfgNum":"SRI-0202010","lastQty":"2","price":"$141.48"},{"id":"75674874","name":"Bondwell\u2122 Disposable Mixing Wells \u2013 2-Well, 200/Pkg","cat":"Manual Mixing Containers & Spatulas","sub":"Mixing Bowls & Wells","mfg":"Plasdent Corporation","mfgNum":"900MW-2","lastQty":"1","price":"$16.74"},{"id":"73751104","name":"Cement Spatulas, 24, Standard Handle, Single End - 6 Satin Steel","cat":"Manual Mixing Containers & Spatulas","sub":"Spatulas","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"CS246","lastQty":"2","price":"$41.00"},{"id":"73709730","name":"Mirror Handle \u2013 # 6, Cone Socket, Round, Satin Steel\u2122, Single End","cat":"Mirrors","sub":"Mouth Mirror Handles","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"MH6","lastQty":"5","price":"$23.73"},{"id":"73713849","name":"Single-Side Cone Socket Mirrors \u2013 Front Surface - # 5 Mirror, 15/16\" (24 mm) Diameter, 1/Pkg","cat":"Mirrors","sub":"Mouth Mirror Heads","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"MIR5","lastQty":"5","price":"$7.57"},{"id":"71197748","name":"Mouth Mirrors \u2013 Disposable, Single-Sided, Single End, 72/Pkg","cat":"Mirrors","sub":"Mouth Mirrors With Handles","mfg":"Palmero Sales Co Inc","mfgNum":"93","lastQty":"1","price":"$52.62"},{"id":"77655327","name":"Lip/Cheek Retractors \u2013 Spandex Lip & Cheek Retractors, 2/Pkg - Child","cat":"Mouth Props, Cheek Retractors & Gags","sub":"Cheek & Lip Retractors & Expanders","mfg":"Hager Worldwide","mfgNum":"605455","lastQty":"1","price":"$53.63"},{"id":"73713229","name":"Molt Mouth Gags - Medium Child","cat":"Mouth Props, Cheek Retractors & Gags","sub":"Mouth Gags","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"MGC","lastQty":"2","price":"$336.02"},{"id":"71516400","name":"Oral-B Glide Healthy Gums Floss \u2013 In-Office, 160 m - Vial with Floss on Spool, 1/Pkg","cat":"Oral Hygiene Products","sub":"Dental Floss","mfg":"Procter & Gamble Company","mfgNum":"80779740","lastQty":"2","price":"$7.49"},{"id":"72230605","name":"Oral-B\u00ae SuperFloss\u2122 - Office Pack, Mint, 1200/Pkg","cat":"Oral Hygiene Products","sub":"Dental Floss","mfg":"Procter & Gamble Company","mfgNum":"80721154","lastQty":"1","price":"$115.70"},{"id":"71068642","name":"Oral-B\u00ae Youth Toothbrushes \u2013 Ages 3+, Extra Soft, 6/Pkg - Spiderman","cat":"Oral Hygiene Products","sub":"Toothbrushes","mfg":"Procter & Gamble Company","mfgNum":"80895073","lastQty":"5","price":"$7.16"},{"id":"71313980","name":"Oral-B\u00ae Kids\u2019 3+ Years Toothbrush \u2013 Extra Soft, 6/Pkg - Disney\u00ae Princess","cat":"Oral Hygiene Products","sub":"Toothbrushes","mfg":"Procter & Gamble Company","mfgNum":"80828185","lastQty":"11","price":"$7.21"},{"id":"75497821","name":"Oral-B\u00ae Toothbrush \u2013 Babies 0-2 Years, Winnie the Pooh, 6/Pkg","cat":"Oral Hygiene Products","sub":"Toothbrushes","mfg":"Procter & Gamble Company","mfgNum":"80355767","lastQty":"5","price":"$7.24"},{"id":"75496245","name":"Crest\u00ae Kid\u2019s Cavity Protection Sparkle Fun Toothpaste - 0.85 oz Tube, 72/Pkg","cat":"Oral Hygiene Products","sub":"Toothpaste Regular","mfg":"Procter & Gamble Company","mfgNum":"80857270","lastQty":"5","price":"$35.37"},{"id":"73705027","name":"IMS\u00ae Lilac Utility Gloves, 3/Pkg - 8 Medium","cat":"Personal Protective Equipment (PPE)","sub":"Gloves","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"40-062","lastQty":"1","price":"$24.51"},{"id":"70585745","name":"Patterson\u00ae Fabric Cover Gowns, 10/Pkg - Small/Medium, Pink","cat":"Personal Protective Equipment (PPE)","sub":"Gowns","mfg":"Patterson Dental Supply","mfgNum":"058-5745","lastQty":"1","price":"$8.78"},{"id":"76993620","name":"Ultimate Patient Drape Sheets \u2013 T/P/T, Blue, 40\" x 48\" 50/Pkg","cat":"Personal Protective Equipment (PPE)","sub":"Patient Drapes","mfg":"Tidi Products Llc","mfgNum":"919374","lastQty":"1","price":"$51.78"},{"id":"70850081","name":"Patterson\u00ae 0.12% Chlorhexidine Gluconate Oral Rinse, Light Mint - 16 oz Bottle","cat":"Preventive Products","sub":"Chlorhexidine Gluconate & Perio Rinses","mfg":"Patterson Dental Supply","mfgNum":"10025-HPAT","lastQty":"1","price":"$5.39"},{"id":"71476696","name":"3M\u2122 Clinpro\u2122 Clear Fluoride Treatment \u2013 2.1% Sodium Fluoride, 0.5 ml Unit Dose - # 7210W, Watermelon, 100/Pkg","cat":"Preventive Products","sub":"Fluoride Varnishes","mfg":"Solventum Us Llc","mfgNum":"7210W","lastQty":"1","price":"$233.44"},{"id":"71476704","name":"3M\u2122 Clinpro\u2122 Clear Fluoride Treatment \u2013 2.1% Sodium Fluoride, 0.5 ml Unit Dose - # 7210FF, Flavorless, 100/Pkg","cat":"Preventive Products","sub":"Fluoride Varnishes","mfg":"Solventum Us Llc","mfgNum":"7210FF","lastQty":"1","price":"$233.44"},{"id":"75012737","name":"Clinpro\u2122 Sealant Syringe Refill","cat":"Preventive Products","sub":"Sealants","mfg":"Solventum Us Llc","mfgNum":"12627","lastQty":"8","price":"$32.18"},{"id":"70388546","name":"Braval\u00ae Disposable Prophy Angles - 100/Pkg","cat":"Prophy Angles, Brushes & Cups","sub":"Angles Prophy Disposable","mfg":"Braval","mfgNum":"295012","lastQty":"2","price":"$35.17"},{"id":"71392422","name":"Patterson\u00ae Flowable Composite \u2013 Regular Viscosity, 2 g Syringe Refills - Shade A2","cat":"Restorative/Cosmetic Instruments & Materials","sub":"Composite Flowable","mfg":"Patterson Dental Supply","mfgNum":"7869402","lastQty":"1","price":"$27.90"},{"id":"71517309","name":"ACTIVA KIDS BioACTIVE Bulk Flow Kit - ShadeFusion, 1 Syringe","cat":"Restorative/Cosmetic Instruments & Materials","sub":"Composite Flowable","mfg":"Pulpdent Corp Of America","mfgNum":"VKBF1US","lastQty":"1","price":"$109.75"},{"id":"71517317","name":"ACTIVA KIDS BioACTIVE Bulk Flow Kit - Opaque White, 1 Syringe","cat":"Restorative/Cosmetic Instruments & Materials","sub":"Composite Flowable","mfg":"Pulpdent Corp Of America","mfgNum":"VKBF1OW","lastQty":"1","price":"$109.75"},{"id":"71489012","name":"3M\u2122 Filtek\u2122 Easy Match Universal Restorative \u2013 0.2 g, Capsule, 20/Pkg - Bright","cat":"Restorative/Cosmetic Instruments & Materials","sub":"Composite Universal","mfg":"Solventum Us Llc","mfgNum":"6110B","lastQty":"2","price":"$131.71"},{"id":"71489020","name":"3M\u2122 Filtek\u2122 Easy Match Universal Restorative \u2013 0.2 g, Capsule, 20/Pkg - Natural","cat":"Restorative/Cosmetic Instruments & Materials","sub":"Composite Universal","mfg":"Solventum Us Llc","mfgNum":"6110N","lastQty":"3","price":"$131.71"},{"id":"71162726","name":"EQUIA Forte\u00ae HT Glass Ionomer Restorative Intro Kit - Shade A2","cat":"Restorative/Cosmetic Instruments & Materials","sub":"Glass Ionomer Restoratives","mfg":"Gc America Inc","mfgNum":"453002","lastQty":"1","price":"$405.34"},{"id":"77734106","name":"Pedi-Padz II \u2013 Electrode Pads","cat":"Resuscitation Devices","sub":"Defibrillators","mfg":"Zoll Medical Corp","mfgNum":"8900-0810-01","lastQty":"1","price":"$160.64"},{"id":"71346543","name":"Pro-Matrix Curved Bands - Narrow, 50/Pkg","cat":"Retainer Bands & Wedges","sub":"Matrix Bands Metal","mfg":"Young Dental Manufacturing","mfgNum":"19001","lastQty":"1","price":"$63.90"},{"id":"75913736","name":"T-Bands \u2013 0.002\", 100/Box - Assorted Brass, Curved","cat":"Retainer Bands & Wedges","sub":"Matrix Bands Metal","mfg":"Pulpdent Corp Of America","mfgNum":"BTBC/A","lastQty":"1","price":"$20.85"},{"id":"70897157","name":"Patterson\u00ae Matrix Strips - 100/Pkg","cat":"Retainer Bands & Wedges","sub":"Matrix Strips Plastic","mfg":"Patterson Dental Supply","mfgNum":"20 95 8205","lastQty":"1","price":"$3.01"},{"id":"72681310","name":"Matrix Strips \u2013 Clear, 20\"","cat":"Retainer Bands & Wedges","sub":"Matrix Strips Plastic","mfg":"Denmat Holdings Llc","mfgNum":"031000300","lastQty":"1","price":"$57.93"},{"id":"73634797","name":"Mylar Matrix Roll, 300'/Roll","cat":"Retainer Bands & Wedges","sub":"Matrix Strips Plastic","mfg":"Ho Dental Company Llc","mfgNum":"MLR202","lastQty":"1","price":"$75.79"},{"id":"71442664","name":"Wonder Wedges\u00ae Interproximal Wooden Wedges - Small, 12 mm, 100/Pkg","cat":"Retainer Bands & Wedges","sub":"Wedges","mfg":"Keystone Industries","mfgNum":"0921417","lastQty":"1","price":"$18.83"},{"id":"75693809","name":"The Wedge \u2013 Transparent, Assorted Sizes - 100/Pkg","cat":"Retainer Bands & Wedges","sub":"Wedges","mfg":"Directa Inc","mfgNum":"7001","lastQty":"1","price":"$57.88"},{"id":"70887612","name":"Patterson\u00ae Knitted Displacement Cord - Size 0 Purple","cat":"Retraction Materials","sub":"Retraction Cord Plain","mfg":"Patterson Dental Supply","mfgNum":"3171","lastQty":"1","price":"$12.84"},{"id":"70467282","name":"Sickle Scalers \u2013 Nevi Posterior, 4, Double End - 9 Handle, EverEdge\u00ae 2.0","cat":"Scalers & Curettes","sub":"Scalers","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"SCNEVI49E2","lastQty":"5","price":"$74.10"},{"id":"70899559","name":"Patterson\u00ae Chromic Gut Dental Surgical Absorbable Sutures \u2013 3/8 Circle, Reverse Cutting, 12/Pkg - Size 4-0, DS18, Length 18\"","cat":"Scalpel & Suture","sub":"Absorbable Suture/needle Combination","mfg":"Patterson Dental Supply","mfgNum":"0899559","lastQty":"1","price":"$33.22"},{"id":"71239094","name":"Surgical Blades \u2013 Stainless Steel, Individually Packaged, Sterile - Blade #15, 50/Pkg","cat":"Scalpels, Scissors, Knives & Cutters","sub":"Scalpel Blades","mfg":"Bard Parker","mfgNum":"371215","lastQty":"1","price":"$78.66"},{"id":"73737863","name":"Scalpel Handle \u2013 Stainless Steel, Round - 5, Straight","cat":"Scalpels, Scissors, Knives & Cutters","sub":"Scalpel Handles","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"10-130-05","lastQty":"1","price":"$85.01"},{"id":"73739141","name":"Surgical Scissors \u2013 18 Iris, Curved","cat":"Scalpels, Scissors, Knives & Cutters","sub":"Scissors","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"S18","lastQty":"1","price":"$88.40"},{"id":"71021633","name":"ClearView Single-Use Nasal Hoods \u2013 Pedo, 12/Pkg - Outlaw Orange","cat":"Small Equipment","sub":"Nitrous Oxide Products","mfg":"Accutron Inc","mfgNum":"33037-10","lastQty":"1","price":"$82.27"},{"id":"71021641","name":"ClearView Single-Use Nasal Hoods \u2013 Pedo, 12/Pkg - Sassy Strawberry","cat":"Small Equipment","sub":"Nitrous Oxide Products","mfg":"Accutron Inc","mfgNum":"33037-11","lastQty":"1","price":"$82.27"},{"id":"73070687","name":"CaviCide\u00ae Surface Disinfectant and Cleaner - 24 oz Spray","cat":"Sterilization & Disinfectant Cleaners","sub":"Sterilizing & Disinfecting Solutions & Sprays","mfg":"Kerr Totalcare","mfgNum":"13-1024","lastQty":"1","price":"$13.26"},{"id":"73070638","name":"CaviWipes\u2122 Surface Disinfectant Towelette Wipes - 6\" x 6.75\", 160 Wipes/Canister","cat":"Sterilization & Disinfectant Cleaners","sub":"Surface Disinfectant Wipes","mfg":"Kerr Totalcare","mfgNum":"13-1100","lastQty":"3","price":"$10.96"},{"id":"75690318","name":"Excellent COLORS\u2122 Disposable Impression Trays - # 1, Child, Small, Upper, Red, 25/Pkg","cat":"Trays & Accessories","sub":"Trays Plastic","mfg":"Plasdent Corporation","mfgNum":"ITO-1U","lastQty":"1","price":"$9.31"},{"id":"75690326","name":"Excellent COLORS\u2122 Disposable Impression Trays - # 1, Child, Small, Lower, Red, 25/Pkg","cat":"Trays & Accessories","sub":"Trays Plastic","mfg":"Plasdent Corporation","mfgNum":"ITO-1L","lastQty":"1","price":"$9.31"},{"id":"75690334","name":"Excellent COLORS\u2122 Disposable Impression Trays - # 2, Child, Medium, Upper, Orange, 25/Pkg","cat":"Trays & Accessories","sub":"Trays Plastic","mfg":"Plasdent Corporation","mfgNum":"ITO-2U","lastQty":"1","price":"$9.31"},{"id":"75690342","name":"Excellent COLORS\u2122 Disposable Impression Trays - # 2, Child, Medium, Lower, Orange, 25/Pkg","cat":"Trays & Accessories","sub":"Trays Plastic","mfg":"Plasdent Corporation","mfgNum":"ITO-2L","lastQty":"1","price":"$9.31"},{"id":"75690359","name":"Excellent COLORS\u2122 Disposable Impression Trays - # 3, Child, Large, Upper, Blue, 25/Pkg","cat":"Trays & Accessories","sub":"Trays Plastic","mfg":"Plasdent Corporation","mfgNum":"ITO-3U","lastQty":"1","price":"$9.31"},{"id":"75690367","name":"Excellent COLORS\u2122 Disposable Impression Trays - # 3, Child, Large, Lower, Blue, 25/Pkg","cat":"Trays & Accessories","sub":"Trays Plastic","mfg":"Plasdent Corporation","mfgNum":"ITO-3L","lastQty":"1","price":"$9.31"},{"id":"75679246","name":"Set-Up Trays, Size B, Flat (Ritter) - Yellow","cat":"Trays, Tubs & Accessories","sub":"Set-up Trays","mfg":"Plasdent Corporation","mfgNum":"300BF-3","lastQty":"5","price":"$4.96"},{"id":"73749066","name":"Ultrasonic Scaler Inserts \u2013 Swivel Direct Flow\u00ae with Resin Handle, 10 Universal, Lavender - 30 kHz","cat":"Ultrasonic Scaler Tips & Inserts","sub":"Ultrasonic Scaler Inserts","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"UI30SD10","lastQty":"2","price":"$253.65"},{"id":"70909796","name":"Patterson\u00ae Enzyme Tablets, 64/Pkg","cat":"Ultrasonic, Enzymatic & UV-C Cleaners","sub":"Ultrasonic & Enzymatic Cleaning Solutions","mfg":"Patterson Dental Supply","mfgNum":"50036790","lastQty":"1","price":"$45.52"},{"id":"73711710","name":"Enzymax\u00ae Detergent, Liquid - 1 Gallon","cat":"Ultrasonic, Enzymatic & UV-C Cleaners","sub":"Ultrasonic & Enzymatic Cleaning Solutions","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-1226","lastQty":"1","price":"$90.37"},{"id":"70999003","name":"QuickClean\u2122 Tabletop Ultrasonic Cleaner, 3.3 Gallon","cat":"Ultrasonic, Enzymatic & UV-C Cleaners","sub":"Ultrasonic & Uv-c Cleaner Machines","mfg":"Midmark","mfgNum":"QC3-01","lastQty":"1","price":"$3,040.86"},{"id":"71362573","name":"ICX\u2122 Renew Dental Unit Waterline Shock Treatment, 9/Pkg","cat":"Waterline Cleaners","sub":"Waterline Cleaning Solutions & Treatments","mfg":"Adec","mfgNum":"90.1691.01","lastQty":"1","price":"$142.22"},{"id":"77076102","name":"VistaTab Dental Waterline Cleaner \u2013 1.7 g Tablets, 15/Pkg","cat":"Waterline Cleaners","sub":"Waterline Cleaning Solutions & Treatments","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-1451","lastQty":"1","price":"$119.86"},{"id":"71423458","name":"24-Hour In-Office Dental Waterline Test Kit Vial, 4/Pkg","cat":"Waterline Cleaners","sub":"Waterline Test Kits","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-1004","lastQty":"2","price":"$88.94"},{"id":"70825927","name":"Patterson Lead-Free Protective Apron \u2013 Child with Collar - Dog Paws #5","cat":"X-Ray Aprons & Apron Hangers","sub":"X-ray Aprons & Collars","mfg":"Patterson Dental Supply","mfgNum":"825927","lastQty":"1","price":"$204.34"},{"id":"76071302","name":"XCP-DS\u00ae FIT\u2122 Universal Sensor Positioning System, Hygiene Kit with XCP-ORA\u00ae Arms and Rings","cat":"X-Ray Film & Sensor Holders & Positioners","sub":"X-ray Film & Digital Sensor Holder Kits","mfg":"Dentsply Rinn","mfgNum":"559900","lastQty":"1","price":"$332.45"},{"id":"71422732","name":"Patterson\u00ae Disposable Bitewing Tabs, 500/Pkg","cat":"X-Ray Film & Sensor Holders & Positioners","sub":"X-ray Film & Digital Sensor Holders","mfg":"Patterson Dental Supply","mfgNum":"PABW-01","lastQty":"1","price":"$14.58"},{"id":"76615314","name":"Wingers\u00ae Digital Sensor Holders \u2013 Wingers-H Classic Horizontal Bitewing, 125/Pkg - Small","cat":"X-Ray Film & Sensor Holders & Positioners","sub":"X-ray Film & Digital Sensor Holders","mfg":"Steri-shield Products","mfgNum":"088-026","lastQty":"1","price":"$39.57"},{"id":"77658354","name":"Soft Bitewing Tabs, 500/Pkg","cat":"X-Ray Film & Sensor Holders & Positioners","sub":"X-ray Film & Digital Sensor Holders","mfg":"Hager Worldwide","mfgNum":"656303","lastQty":"1","price":"$46.70"},{"id":"70495812","name":"IMS UNIVERSAL WRAP 15X15 100","cat":"","sub":"","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"IMS-1215H","lastQty":"1","price":"$21.40"},{"id":"71247360","name":"DENTAPURE 365 DAY INDEPENDENT WATER CART","cat":"","sub":"","mfg":"Hu-friedy Manufacturing Co Inc","mfgNum":"DP365B-HF","lastQty":"2","price":"$289.94"},{"id":"101622578","name":"MIDMARK M11 STEAM STERILIZER 115V","cat":"","sub":"","mfg":"Midmark","mfgNum":"M11-040","lastQty":"1","price":"$8,817.09"},{"id":"Price Total:","name":"Price Total:","cat":"Price Total:","sub":"Price Total:","mfg":"Price Total:","mfgNum":"Price Total:","lastQty":"Price Total:","price":""},{"id":"Patterson Item #","name":"Item Description","cat":"Category","sub":"Sub Category","mfg":"Manufacturer Name","mfgNum":"Manufacturer Item #","lastQty":"Last Inv Qty","price":"Unit Price"},{"id":"Prices are subject to change without notice. Your actual invoice cost may differ from displayed due to taxes, shipping or other adjustments.","name":"Prices are subject to change without notice. Your actual invoice cost may differ from displayed due to taxes, shipping or other adjustments.","cat":"Prices are subject to change without notice. Your actual invoice cost may differ from displayed due to taxes, shipping or other adjustments.","sub":"Prices are subject to change without notice. Your actual invoice cost may differ from displayed due to taxes, shipping or other adjustments.","mfg":"Prices are subject to change without notice. Your actual invoice cost may differ from displayed due to taxes, shipping or other adjustments.","mfgNum":"Prices are subject to change without notice. Your actual invoice cost may differ from displayed due to taxes, shipping or other adjustments.","lastQty":"Prices are subject to change without notice. Your actual invoice cost may differ from displayed due to taxes, shipping or other adjustments.","price":""}];
+const CATALOG_BY_ID = {};
+CATALOG.forEach(it => CATALOG_BY_ID[it.id] = it);
+
+let webhookUrl = '';
+let loggedBy = '';
+let scanLog = [];
+let stream = null;
+let scanning = false;
+let currentItem = null;
+let lastScannedCode = null;
+let lastScanTime = 0;
+
+// ---------- storage ----------
+async function loadState() {
+  try {
+    const r = await window.storage.get('settings');
+    if (r && r.value) {
+      const s = JSON.parse(r.value);
+      webhookUrl = s.webhookUrl || '';
+      loggedBy = s.loggedBy || '';
+    }
+  } catch (e) {}
+  try {
+    const r = await window.storage.get('scanLog');
+    if (r && r.value) scanLog = JSON.parse(r.value);
+  } catch (e) {}
+  document.getElementById('webhookUrl').value = webhookUrl;
+  document.getElementById('loggedBy').value = loggedBy;
+  updateConnStatus();
+  renderLog();
+}
+
+async function saveSettings() {
+  try {
+    await window.storage.set('settings', JSON.stringify({ webhookUrl, loggedBy }));
+  } catch (e) {}
+}
+
+async function saveLog() {
+  try {
+    await window.storage.set('scanLog', JSON.stringify(scanLog.slice(0, 300)));
+  } catch (e) {}
+}
+
+function updateConnStatus() {
+  const el = document.getElementById('connStatus');
+  const banner = document.getElementById('setupBanner');
+  if (webhookUrl) {
+    el.innerHTML = '<div class="status-pill"><span class="dot"></span>Connected to Google Sheet</div>';
+    banner.style.display = 'none';
+  } else {
+    el.innerHTML = '<div class="status-pill off"><span class="dot"></span>Not connected yet</div>';
+    banner.style.display = 'block';
+  }
+}
+
+function saveWebhook() {
+  webhookUrl = document.getElementById('webhookUrl').value.trim();
+  loggedBy = document.getElementById('loggedBy').value.trim();
+  saveSettings();
+  updateConnStatus();
+  showToast('Settings saved');
+}
+
+// ---------- views ----------
+function showView(name) {
+  document.getElementById('scanView').style.display = name === 'scan' ? 'block' : 'none';
+  document.getElementById('logView').style.display = name === 'log' ? 'block' : 'none';
+  document.getElementById('settingsView').style.display = name === 'settings' ? 'block' : 'none';
+  document.getElementById('tabScan').classList.toggle('active', name === 'scan');
+  document.getElementById('tabLog').classList.toggle('active', name === 'log');
+  document.getElementById('tabSettings').classList.toggle('active', name === 'settings');
+  if (name !== 'scan') stopCamera();
+}
+
+// ---------- camera + scanning ----------
+async function toggleCamera() {
+  if (scanning) { stopCamera(); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const video = document.getElementById('video');
+    video.srcObject = stream;
+    await video.play();
+    document.getElementById('camOff').style.display = 'none';
+    video.style.display = 'block';
+    document.getElementById('scanFrame').style.display = 'block';
+    document.getElementById('scanHint').style.display = 'block';
+    document.getElementById('camToggleBtn').textContent = 'Stop camera';
+    scanning = true;
+    requestAnimationFrame(scanFrame);
+  } catch (e) {
+    showToast('Camera unavailable — use search below instead', true);
+  }
+}
+
+function stopCamera() {
+  scanning = false;
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  const video = document.getElementById('video');
+  video.style.display = 'none';
+  document.getElementById('camOff').style.display = 'flex';
+  document.getElementById('scanFrame').style.display = 'none';
+  document.getElementById('scanHint').style.display = 'none';
+  document.getElementById('camToggleBtn').textContent = 'Start camera';
+}
+
+function scanFrame() {
+  if (!scanning) return;
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  if (video.readyState === video.HAVE_ENOUGH_DATA) {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(imageData.data, imageData.width, imageData.height);
+    if (code && code.data) {
+      handleScannedText(code.data);
+    }
+  }
+  requestAnimationFrame(scanFrame);
+}
+
+function handleScannedText(text) {
+  const now = Date.now();
+  if (text === lastScannedCode && now - lastScanTime < 2500) return; // debounce repeat scans
+  lastScannedCode = text;
+  lastScanTime = now;
+
+  const id = text.replace(/^INV-/i, '').trim();
+  const item = CATALOG_BY_ID[id];
+  if (item) {
+    if (navigator.vibrate) navigator.vibrate(80);
+    selectItem(item);
+  } else {
+    showToast('Unrecognized code: ' + text, true);
+  }
+}
+
+// ---------- manual search ----------
+function onManualSearch() {
+  const q = document.getElementById('manualSearch').value.trim().toLowerCase();
+  const resultsEl = document.getElementById('searchResults');
+  if (!q) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+  const matches = CATALOG.filter(it =>
+    (it.name + ' ' + it.id + ' ' + it.mfgNum + ' ' + it.cat).toLowerCase().includes(q)
+  ).slice(0, 8);
+  if (matches.length === 0) {
+    resultsEl.innerHTML = '<div class="result">No matches</div>';
+  } else {
+    resultsEl.innerHTML = matches.map(it =>
+      `<div class="result" onclick='selectItemById("${it.id}")'>
+        <div class="rname">${it.name}</div>
+        <div class="rmeta">ID ${it.id} &middot; ${it.cat}</div>
+      </div>`
+    ).join('');
+  }
+  resultsEl.style.display = 'block';
+}
+
+function selectItemById(id) {
+  const item = CATALOG_BY_ID[id];
+  if (item) selectItem(item);
+  document.getElementById('manualSearch').value = '';
+  document.getElementById('searchResults').style.display = 'none';
+}
+
+// ---------- item + quantity ----------
+function selectItem(item) {
+  currentItem = item;
+  const area = document.getElementById('itemArea');
+  area.innerHTML = `
+    <div class="item-card">
+      <div class="cat">${item.sub || item.cat}</div>
+      <div class="name">${item.name}</div>
+      <div class="row"><span>Manufacturer</span><b>${item.mfg}</b></div>
+      <div class="row"><span>Item #</span><b>${item.mfgNum} (Patterson ${item.id})</b></div>
+      <div class="row"><span>Last order qty</span><b>${item.lastQty || '—'}</b></div>
+      <div class="row"><span>Unit price</span><b>${item.price || '—'}</b></div>
+
+      <div class="qty-section">
+        <div class="qty-label">Quantity needed</div>
+        <div class="qty-stepper">
+          <button onclick="stepQty(-1)">&minus;</button>
+          <input type="number" id="qtyInput" value="1" min="1" inputmode="numeric">
+          <button onclick="stepQty(1)">+</button>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <button class="primary" onclick="logScan()">Log to inventory</button>
+        <button class="secondary" onclick="clearItem()">Cancel</button>
+      </div>
+    </div>
+  `;
+  area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function stepQty(delta) {
+  const input = document.getElementById('qtyInput');
+  let v = parseInt(input.value || '1', 10) + delta;
+  if (v < 1) v = 1;
+  input.value = v;
+}
+
+function clearItem() {
+  currentItem = null;
+  document.getElementById('itemArea').innerHTML = '';
+}
+
+// ---------- logging ----------
+async function logScan() {
+  const qty = parseInt(document.getElementById('qtyInput').value || '1', 10);
+  const entry = {
+    ts: new Date().toISOString(),
+    item: currentItem.name,
+    cat: currentItem.cat,
+    mfg: currentItem.mfg,
+    mfgNum: currentItem.mfgNum,
+    id: currentItem.id,
+    qty: qty,
+    by: loggedBy,
+    status: webhookUrl ? 'pending' : 'local'
+  };
+  scanLog.unshift(entry);
+  await saveLog();
+  renderLog();
+  clearItem();
+  document.getElementById('manualSearch').value = '';
+
+  if (webhookUrl) {
+    showToast('Logged — sending to sheet…');
+    sendToSheet(entry);
+  } else {
+    showToast('Logged locally (connect a Google Sheet in Settings to sync)');
+  }
+}
+
+function sendToSheet(entry) {
+  fetch(webhookUrl, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(entry)
+  }).then(() => {
+    entry.status = 'ok';
+    saveLog();
+    renderLog();
+  }).catch(() => {
+    entry.status = 'err';
+    saveLog();
+    renderLog();
+    showToast('Could not reach the sheet — saved locally', true);
+  });
+}
+
+function renderLog() {
+  const el = document.getElementById('logList');
+  if (scanLog.length === 0) {
+    el.innerHTML = '<div class="empty-state">No scans yet. Scan a label or search for an item to get started.</div>';
+    return;
+  }
+  el.innerHTML = scanLog.map(e => {
+    const statusLabel = e.status === 'ok' ? 'Synced to sheet' : e.status === 'pending' ? 'Sending…' : e.status === 'err' ? 'Not synced — saved locally' : 'Saved locally only';
+    const statusClass = e.status === 'ok' ? 'ok' : e.status === 'err' ? 'err' : 'pending';
+    const d = new Date(e.ts);
+    return `<div class="log-item">
+      <div>
+        <div class="lname">${e.item}</div>
+        <div class="lmeta">${d.toLocaleString()} ${e.by ? '&middot; ' + e.by : ''}</div>
+        <div class="lstatus ${statusClass}">${statusLabel}</div>
+      </div>
+      <div class="lqty">${e.qty}</div>
+    </div>`;
+  }).join('');
+}
+
+async function clearLog() {
+  scanLog = [];
+  await saveLog();
+  renderLog();
+  showToast('Local history cleared');
+}
+
+function exportCsv() {
+  if (scanLog.length === 0) { showToast('Nothing to export yet', true); return; }
+  const header = ['Timestamp','Item','Category','Manufacturer','Mfg Item #','Patterson Item #','Qty Needed','Logged By','Sync Status'];
+  const rows = scanLog.map(e => [e.ts, e.item, e.cat, e.mfg, e.mfgNum, e.id, e.qty, e.by, e.status]);
+  const csv = [header, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'inventory-scan-history.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- toast ----------
+let toastTimer = null;
+function showToast(msg, isError) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isError ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, 2600);
+}
+
+loadState();
+</script>
+</body>
+</html>
