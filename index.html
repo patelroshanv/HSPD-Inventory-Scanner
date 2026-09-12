@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Inventory Scanner — Param Anand PLLC</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsqr/1.4.0/jsQR.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <style>
   :root {
     --ink: #17262A;
@@ -369,18 +369,27 @@ function stopCamera() {
 
 function scanFrame() {
   if (!scanning) return;
-  const video = document.getElementById('video');
-  const canvas = document.getElementById('canvas');
-  if (video.readyState === video.HAVE_ENOUGH_DATA) {
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imageData.data, imageData.width, imageData.height);
-    if (code && code.data) {
-      handleScannedText(code.data);
+  try {
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      if (typeof jsQR !== 'function') {
+        showToast('Scanner library failed to load \u2014 check your internet connection and reload', true);
+      } else {
+        const code = jsQR(imageData.data, imageData.width, imageData.height);
+        if (code && code.data) {
+          handleScannedText(code.data);
+        }
+      }
     }
+  } catch (err) {
+    // Never let a per-frame error silently kill the scan loop.
+    console.error('Scan frame error:', err);
   }
   requestAnimationFrame(scanFrame);
 }
